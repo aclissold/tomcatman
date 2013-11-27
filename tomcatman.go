@@ -34,7 +34,7 @@ func configure() {
 	file, err := os.Open("/path/to/tomcatman.conf")
 	if err != nil {
 		if _, ok := err.(*os.PathError); ok {
-			fmt.Fprintln(os.Stderr, "Error: please ensure tomcatman.conf exists and is in the same directory as this program.")
+			fmt.Fprintln(os.Stderr, "Error: please ensure tomcatman.conf exists and the path is configured correctly.")
 			os.Exit(1)
 		}
 		log.Fatal(err)
@@ -63,116 +63,67 @@ func parseArgs() {
 
 // run chooses the correct branch of execution by calling execute on the proper instance.
 func run() {
-	if *stop != "instance" {
-		if _, ok := path[*stop]; ok {
-			execute("stop")
-		} else {
-			fmt.Fprintln(os.Stderr, "Error:", *start, "not found in tomcatman.conf.")
-			os.Exit(1)
-		}
-	}
-
 	if *start != "instance" {
 		if _, ok := path[*start]; ok {
-			execute("start")
+			execute("start", path[*start])
 		} else {
-			fmt.Fprintln(os.Stderr, "Error:", *start, "not found in tomcatman.conf.")
-			os.Exit(1)
+			log.Fatal("Error: instance name \"", *start, "\" not found in tomcatman.conf.")
 		}
 	}
-
+	if *stop != "instance" {
+		if _, ok := path[*stop]; ok {
+			execute("stop", path[*stop])
+		} else {
+			log.Fatal("Error: instance name \"", *stop, "\" not found in tomcatman.conf.")
+		}
+	}
 	if *restart != "instance" {
 		if _, ok := path[*restart]; ok {
-			execute("restart")
+			execute("restart", path[*restart])
 		} else {
-			fmt.Fprintln(os.Stderr, "Error:", *start, "not found in tomcatman.conf.")
-			os.Exit(1)
+			log.Fatal("Error: instance name \"", *start, "\" not found in tomcatman.conf.")
 		}
 	}
 }
 
 // execute starts/stops/restarts the given target.
-func execute(command string) {
+func execute(command, path string) {
+	var scriptName string
+
 	switch command {
 	case "start":
-		os.Setenv("CATALINA_BASE", path[*start])
-		if err := os.Chdir(os.Getenv("CATALINA_HOME") + "/bin"); err != nil {
-			log.Fatal(err)
-		}
-		cmd := exec.Command("./startup.sh")
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			log.Fatal(err)
-		}
-		stderr, err := cmd.StderrPipe()
-		if err != nil {
-			log.Fatal(err)
-		}
-		if err = cmd.Start(); err != nil {
-			log.Fatal(err)
-		}
-		go io.Copy(os.Stdout, stdout)
-		go io.Copy(os.Stderr, stderr)
-		cmd.Wait()
+		os.Setenv("CATALINA_BASE", path)
+		scriptName = "./startup.sh"
 	case "stop":
-		os.Setenv("CATALINA_BASE", path[*stop])
-		if err := os.Chdir(os.Getenv("CATALINA_HOME") + "/bin"); err != nil {
-			log.Fatal(err)
-		}
-		cmd := exec.Command("./shutdown.sh")
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			log.Fatal(err)
-		}
-		stderr, err := cmd.StderrPipe()
-		if err != nil {
-			log.Fatal(err)
-		}
-		if err = cmd.Start(); err != nil {
-			log.Fatal(err)
-		}
-		go io.Copy(os.Stdout, stdout)
-		go io.Copy(os.Stderr, stderr)
-		cmd.Wait()
+		os.Setenv("CATALINA_BASE", path)
+		scriptName = "./shutdown.sh"
 	case "restart":
-		// Stop
-		os.Setenv("CATALINA_BASE", path[*restart])
-		if err := os.Chdir(os.Getenv("CATALINA_HOME") + "/bin"); err != nil {
-			log.Fatal(err)
-		}
-		cmd := exec.Command("./shutdown.sh")
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			log.Fatal(err)
-		}
-		stderr, err := cmd.StderrPipe()
-		if err != nil {
-			log.Fatal(err)
-		}
-		if err = cmd.Start(); err != nil {
-			log.Fatal(err)
-		}
-		go io.Copy(os.Stdout, stdout)
-		go io.Copy(os.Stderr, stderr)
-		cmd.Wait()
-
-		time.Sleep(5 * time.Second)
-
-		// Start
-		cmd = exec.Command("./startup.sh")
-		stdout, err = cmd.StdoutPipe()
-		if err != nil {
-			log.Fatal(err)
-		}
-		stderr, err = cmd.StderrPipe()
-		if err != nil {
-			log.Fatal(err)
-		}
-		if err = cmd.Start(); err != nil {
-			log.Fatal(err)
-		}
-		go io.Copy(os.Stdout, stdout)
-		go io.Copy(os.Stderr, stderr)
-		cmd.Wait()
+		execute("stop", path)
+		time.Sleep(5 * time.Second) //TODO: Remove this magic number
+		execute("start", path)
+		return
+	default:
+		log.Fatal("unknown command")
 	}
+
+	if err := os.Chdir(os.Getenv("CATALINA_HOME") + "/bin"); err != nil {
+		log.Fatal(err)
+	}
+	cmd := exec.Command(scriptName)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Fatal(err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = cmd.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+	go io.Copy(os.Stdout, stdout)
+	go io.Copy(os.Stderr, stderr)
+	cmd.Wait()
 }

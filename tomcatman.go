@@ -31,14 +31,16 @@ func main() {
 
 // configure reads the config file to determine which flags should be available.
 func configure() {
-	file, err := os.Open("/path/to/tomcatman.conf")
+	file, err := os.Open(os.Getenv("HOME") + "/.tomcatmanrc")
 	if err != nil {
 		if _, ok := err.(*os.PathError); ok {
-			fmt.Fprintln(os.Stderr, "Error: please ensure tomcatman.conf exists and the path is configured correctly.")
+			fmt.Fprintln(os.Stderr, "Error: please ensure ~/.tomcatmanrc exists.")
 			os.Exit(1)
 		}
 		log.Fatal(err)
 	}
+	defer file.Close()
+
 	var data []string
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -67,21 +69,21 @@ func run() {
 		if _, ok := path[*start]; ok {
 			execute("start", path[*start])
 		} else {
-			log.Fatal("Error: instance name \"", *start, "\" not found in tomcatman.conf.")
+			log.Fatal("Error: instance name \"", *start, "\" not found in .tomcatmanrc.")
 		}
 	}
 	if *stop != "instance" {
 		if _, ok := path[*stop]; ok {
 			execute("stop", path[*stop])
 		} else {
-			log.Fatal("Error: instance name \"", *stop, "\" not found in tomcatman.conf.")
+			log.Fatal("Error: instance name \"", *stop, "\" not found in .tomcatmanrc.")
 		}
 	}
 	if *restart != "instance" {
 		if _, ok := path[*restart]; ok {
 			execute("restart", path[*restart])
 		} else {
-			log.Fatal("Error: instance name \"", *start, "\" not found in tomcatman.conf.")
+			log.Fatal("Error: instance name \"", *start, "\" not found in .tomcatmanrc.")
 		}
 	}
 }
